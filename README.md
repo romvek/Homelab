@@ -42,7 +42,7 @@ There are numerous skills that I want to learn or improve upon.
 - Docker
 
 #### Test
-- 
+- Windows Server 2025
 
 #### Planned
 - Homepage
