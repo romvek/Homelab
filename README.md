@@ -1,11 +1,13 @@
 # Homelab
-##  Intro
+##  Intro 
+<img align=right width="25%" src="https://github.com/romvek/Homelab/blob/main/images/server.jpg" >
 The purpose of this repo is document my processes of maintaing my homelab. I have had a homelabe for several years and while I do maintain some sort of documentation, I want to improve my documentation habits and skills. I want to expand my skillset into the devops world and grow my security engineering skills.
 
 This is not just a side project... 
 - it is how I maintain my home network (_aka: make sure the wifi isn't **slow**_)
 - it is how I maintain skills and learn new ones
 - it is how I explore my technology curiosity
+<br clear="right" />
 
 ## Learning Objectives
 There are numerous skills that I want to learn or improve upon.
