@@ -21,7 +21,7 @@ There are numerous skills that I want to learn or improve upon.
 - CPU: Intel i5-12600K 
 - RAM: Corsair Vengance 32 GB
 - PSU: Corsair RM750e
-- Mootherboard: MSI PRO B760M-P
+- Motherboard: MSI PRO B760M-P
 - Storage:
   - Samsung 960 EVO 250 GB - Boot Drive
   - Samsung 840 Pro 256 GB
