@@ -14,58 +14,84 @@ echo "          GLPI AUTOMATED INSTALLATION SCRIPT             "
 echo "=========================================================="
 
 echo "==> 1. UPDATING SYSTEM & INSTALLING PACKAGES"
-echo "This may take a few minutes..."
+echo "This phase ensures all dependencies are present before configuration."
 apt update && apt upgrade -y
 apt install -y curl wget apache2 mariadb-server php libapache2-mod-php \
 php-{apcu,cli,common,curl,gd,imap,ldap,mysql,xmlrpc,xml,mbstring,bcmath,intl,zip,redis,bz2,soap,cas}
 
 # ==========================================
-# 2. INTERACTIVE CONFIGURATION & DETECTION
+# 2. INTERACTIVE CONFIGURATION
 # ==========================================
 echo ""
 echo "==> 2. CONFIGURATION & DETECTION"
-echo "Please confirm or customize the following settings:"
+echo "Note: You must provide input for each step to proceed."
 echo "----------------------------------------------------------"
 
 # --- TIMEZONE ---
 DETECTED_TZ=$(timedatectl | grep "Time zone" | awk '{print $3}')
 DETECTED_TZ=${DETECTED_TZ:-UTC}
-read -p "Detected Timezone [$DETECTED_TZ]. Press Enter to accept or type custom: " USER_TZ
-TIMEZONE=${USER_TZ:-$DETECTED_TZ}
+while true; do
+    read -p "Detected Timezone is [$DETECTED_TZ]. Accept? (y/n): " TZ_CONFIRM
+    if [[ $TZ_CONFIRM =~ ^[Yy]$ ]]; then
+        TIMEZONE=$DETECTED_TZ
+        break
+    elif [[ $TZ_CONFIRM =~ ^[Nn]$ ]]; then
+        read -p "Enter your specific Timezone (e.g., America/New_York): " TIMEZONE
+        [ ! -z "$TIMEZONE" ] && break
+    fi
+    echo "Invalid input. Please enter 'y' to accept or 'n' to customize."
+done
 
 # --- DOMAIN ---
-read -p "Enter Domain/Hostname [default: localhost]: " USER_DOMAIN
-DOMAIN_NAME=${USER_DOMAIN:-localhost}
+while true; do
+    read -p "Enter Domain/Hostname (Type 'localhost' for local setup): " DOMAIN_NAME
+    [ ! -z "$DOMAIN_NAME" ] && break
+    echo "Domain name cannot be empty."
+done
 
 # --- DB USERNAME ---
-read -p "Enter Database Username [default: glpi]: " USER_DB_USER
-DB_USER=${USER_DB_USER:-glpi}
+while true; do
+    read -p "Enter Database Username (e.g., glpi): " DB_USER
+    [ ! -z "$DB_USER" ] && break
+    echo "Database username cannot be empty."
+done
 
 # --- DB NAME ---
-read -p "Enter Database Name [default: glpi]: " USER_DB_NAME
-DB_NAME=${USER_DB_NAME:-glpi}
+while true; do
+    read -p "Enter Database Name (e.g., glpidb): " DB_NAME
+    [ ! -z "$DB_NAME" ] && break
+    echo "Database name cannot be empty."
+done
 
 # --- DB PASSWORD ---
 while true; do
-    read -s -p "Enter Password for Database User '$DB_USER': " DB_PASS
+    echo "Setting password for DB user '$DB_USER'..."
+    read -s -p "Enter Password: " DB_PASS
     echo ""
     read -s -p "Confirm Password: " DB_PASS_CONFIRM
     echo ""
-    [ "$DB_PASS" == "$DB_PASS_CONFIRM" ] && [ ! -z "$DB_PASS" ] && break
-    echo "Passwords do not match or are empty. Please try again."
+    
+    if [ -z "$DB_PASS" ]; then
+        echo "Password cannot be empty!"
+    elif [ "$DB_PASS" != "$DB_PASS_CONFIRM" ]; then
+        echo "Passwords do not match! Please try again."
+    else
+        break
+    fi
 done
 
 # --- FINAL CONFIRMATION ---
 echo ""
-echo "PROCEED WITH THESE SETTINGS?"
-echo "- Timezone: $TIMEZONE"
-echo "- Domain:   $DOMAIN_NAME"
-echo "- DB User:  $DB_USER"
-echo "- DB Name:  $DB_NAME"
+echo "FINAL INSTALLATION SUMMARY:"
 echo "----------------------------------------------------------"
-read -p "Continue? (y/n): " CONFIRM
-if [[ ! $CONFIRM =~ ^[Yy]$ ]]; then
-    echo "Installation cancelled."
+echo "Timezone:   $TIMEZONE"
+echo "Domain:     $DOMAIN_NAME"
+echo "DB User:    $DB_USER"
+echo "DB Name:    $DB_NAME"
+echo "----------------------------------------------------------"
+read -p "Apply settings and install GLPI now? (y/n): " FINAL_CONFIRM
+if [[ ! $FINAL_CONFIRM =~ ^[Yy]$ ]]; then
+    echo "Installation aborted by user."
     exit 1
 fi
 
@@ -73,11 +99,11 @@ fi
 # 3. EXECUTION STEPS
 # ==========================================
 
-echo "==> 3. Detecting PHP and GLPI Versions..."
+echo "==> 3. Identifying Latest Versions..."
 PHP_VER=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
 GLPI_VERSION=$(curl -s https://api.github.com/repos/glpi-project/glpi/releases/latest | grep '"tag_name":' | head -n 1 | awk -F '"' '{print $4}')
 
-echo "==> 4. Configuring MariaDB..."
+echo "==> 4. Initializing MariaDB..."
 mysql_tzinfo_to_sql /usr/share/zoneinfo | mysql mysql
 mysql -uroot -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME};"
 mysql -uroot -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';"
@@ -85,13 +111,13 @@ mysql -uroot -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost
 mysql -uroot -e "GRANT SELECT ON \`mysql\`.\`time_zone_name\` TO '${DB_USER}'@'localhost';"
 mysql -uroot -e "FLUSH PRIVILEGES;"
 
-echo "==> 5. Downloading GLPI ${GLPI_VERSION}..."
+echo "==> 5. Downloading and Unpacking GLPI ${GLPI_VERSION}..."
 cd /var/www/html
 wget https://github.com/glpi-project/glpi/releases/download/${GLPI_VERSION}/glpi-${GLPI_VERSION}.tgz
 tar -xvzf glpi-${GLPI_VERSION}.tgz
 rm glpi-${GLPI_VERSION}.tgz
 
-echo "==> 6. Setting up File Hierarchy (FHS)..."
+echo "==> 6. Applying FHS Directory Structure..."
 cat <<EOF > /var/www/html/glpi/inc/downstream.php
 <?php
 define('GLPI_CONFIG_DIR', '/etc/glpi/');
@@ -124,7 +150,7 @@ define('GLPI_INVENTORY_DIR', GLPI_VAR_DIR . '/_inventories');
 define('GLPI_THEMES_DIR', GLPI_VAR_DIR . '/_themes');
 EOF
 
-echo "==> 7. Setting Permissions..."
+echo "==> 7. Configuring Permissions..."
 chown root:root /var/www/html/glpi/ -R
 chown www-data:www-data /etc/glpi /var/lib/glpi /var/log/glpi -R
 chown www-data:www-data /var/www/html/glpi/marketplace -Rf
@@ -132,7 +158,7 @@ find /var/www/html/glpi/ -type f -exec chmod 0644 {} \;
 find /var/www/html/glpi/ -type d -exec chmod 0755 {} \;
 chmod -R 0755 /etc/glpi /var/lib/glpi /var/log/glpi
 
-echo "==> 8. Configuring Apache & PHP Tuning..."
+echo "==> 8. Finalizing Web Server & PHP ${PHP_VER}..."
 cat <<EOF > /etc/apache2/sites-available/glpi.conf
 <VirtualHost *:80>
     ServerName ${DOMAIN_NAME}
@@ -166,9 +192,9 @@ fi
 systemctl restart apache2
 
 echo "=========================================================="
-echo "DONE! Access GLPI at: http://${DOMAIN_NAME}"
-echo "PHP Version Detected: ${PHP_VER}"
+echo "GLPI INSTALLATION COMPLETE!"
+echo "URL: http://${DOMAIN_NAME}"
 echo "----------------------------------------------------------"
-echo "DB User: ${DB_USER} | DB Name: ${DB_NAME}"
-echo "Default GLPI User/Pass: glpi/glpi"
+echo "Configuration complete. Please finish the setup in your browser."
+echo "Database credentials set as requested during script run."
 echo "=========================================================="
