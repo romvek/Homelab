@@ -1,5 +1,5 @@
 #!/bin/bash
-# GLPI Installation Script (Interactive Domain & Auto-Configuration)
+# GLPI Installation Script
 # Source: https://help.glpi-project.org/tutorials/procedures/install_glpi
 
 # Ensure the script is run as root
