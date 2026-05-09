@@ -1,5 +1,5 @@
 #!/bin/bash
-# GLPI Installation Script (Interactive Domain & Auto-Configuration)
+# GLPI Installation Script (Merged & Hardened Interactive Version)
 # Source: https://help.glpi-project.org/tutorials/procedures/install_glpi
 
 # Ensure the script is run as root
@@ -15,6 +15,8 @@ echo "=========================================================="
 
 echo "==> 1. UPDATING SYSTEM & INSTALLING PACKAGES"
 echo "This may take a few minutes..."
+# Use noninteractive frontend to prevent apt from breaking the terminal buffer
+export DEBIAN_FRONTEND=noninteractive
 apt update && apt upgrade -y
 apt install -y curl wget apache2 mariadb-server php libapache2-mod-php \
 php-{apcu,cli,common,curl,gd,imap,ldap,mysql,xmlrpc,xml,mbstring,bcmath,intl,zip,redis,bz2,soap,cas}
@@ -27,12 +29,17 @@ echo "==> 2. CONFIGURATION & DETECTION"
 echo "Note: You must provide input for each step to proceed."
 echo "----------------------------------------------------------"
 
+# FORCE INPUT TO READ FROM TERMINAL (Fixes the infinite loop/spamming error)
+exec 3<&0
+exec 0</dev/tty
+
 # --- TIMEZONE ---
 DETECTED_TZ=$(timedatectl | grep "Time zone" | awk '{print $3}')
 if [ -z "$DETECTED_TZ" ]; then
     DETECTED_TZ="UTC"
     echo "Warning: Could not detect system timezone. Falling back to UTC."
 fi
+
 while true; do
     read -rp "Detected Timezone is [$DETECTED_TZ]. Accept? (y/n): " TZ_CONFIRM
     if [[ $TZ_CONFIRM =~ ^[Yy]$ ]]; then
@@ -41,34 +48,30 @@ while true; do
     elif [[ $TZ_CONFIRM =~ ^[Nn]$ ]]; then
         read -rp "Enter your specific Timezone (e.g., America/New_York): " TIMEZONE
         [ -n "$TIMEZONE" ] && break
-        read -rp "Enter your specific Timezone (e.g., America/New_York). See /usr/share/zoneinfo/ for valid options: " TIMEZONE
-    echo "Invalid input. Please enter 'y' to accept or 'n' to customize."
-  
-        read -rp "Enter your specific Timezone (e.g., America/New_York): " TIMEZONE
-        [ -n "$TIMEZONE" ] && break
+    else
+        echo "Invalid input. Please enter 'y' to accept or 'n' to customize."
     fi
-    echo "Invalid input. Please enter 'y' to accept or 'n' to customize."
 done
 
 # --- DOMAIN ---
 while true; do
-    read -rp "Enter Domain/Hostname to be used in Apache configuration (Type 'localhost' for local setup): " DOMAIN_NAME
+    read -rp "Enter Domain/Hostname (Type 'localhost' for local setup): " DOMAIN_NAME
     [ -n "$DOMAIN_NAME" ] && break
     echo "Domain name cannot be empty."
 done
 
 # --- DB USERNAME ---
 while true; do
-    read -rp "Enter Database Username (e.g., glpi) [will be created if it does not exist]: " DB_USER
+    read -rp "Enter Database Username [glpi]: " DB_USER
+    DB_USER=${DB_USER:-glpi}
     [ -n "$DB_USER" ] && break
-    echo "Database username cannot be empty."
 done
 
 # --- DB NAME ---
 while true; do
-    read -rp "Enter Database Name (e.g., glpidb) [will be created if it does not exist]: " DB_NAME
+    read -rp "Enter Database Name [glpidb]: " DB_NAME
+    DB_NAME=${DB_NAME:-glpidb}
     [ -n "$DB_NAME" ] && break
-    echo "Database name cannot be empty."
 done
 
 # --- DB PASSWORD ---
@@ -83,15 +86,12 @@ while true; do
     read -s -rp "Confirm Password: " DB_PASS_CONFIRM
     echo ""
 
-    # Password strength check: minimum 8 chars, at least one number and one letter
     if [ "$DB_PASS" != "$DB_PASS_CONFIRM" ]; then
         echo "Passwords do not match! Please try again."
     elif [[ ${#DB_PASS} -lt 8 || ! "$DB_PASS" =~ [A-Za-z] || ! "$DB_PASS" =~ [0-9] ]]; then
-        echo "Warning: Password should be at least 8 characters and contain both letters and numbers."
-        read -rp "Continue with this password? (y/n): " PASS_WEAK_CONFIRM
-        if [[ ! $PASS_WEAK_CONFIRM =~ ^[Yy]$ ]]; then
-            continue
-        else
+        echo "Warning: Password is weak (needs 8+ chars, letters, and numbers)."
+        read -rp "Continue anyway? (y/n): " PASS_WEAK_CONFIRM
+        if [[ $PASS_WEAK_CONFIRM =~ ^[Yy]$ ]]; then
             break
         fi
     else
@@ -114,6 +114,9 @@ if [[ ! $FINAL_CONFIRM =~ ^[Yy]$ ]]; then
     exit 1
 fi
 
+# Restore original stdin
+exec 0<&3
+
 # ==========================================
 # 3. EXECUTION STEPS
 # ==========================================
@@ -132,8 +135,8 @@ mysql -uroot -e "FLUSH PRIVILEGES;"
 
 echo "==> 5. Downloading GLPI ${GLPI_VERSION}..."
 cd /var/www/html || exit
-wget https://github.com/glpi-project/glpi/releases/download/"${GLPI_VERSION}"/glpi-"${GLPI_VERSION}".tgz
-tar -xvzf glpi-"${GLPI_VERSION}".tgz
+wget -q https://github.com/glpi-project/glpi/releases/download/"${GLPI_VERSION}"/glpi-"${GLPI_VERSION}".tgz
+tar -xzf glpi-"${GLPI_VERSION}".tgz
 rm glpi-"${GLPI_VERSION}".tgz
 
 echo "==> 6. Setting up File Hierarchy (FHS)..."
@@ -170,9 +173,9 @@ define('GLPI_THEMES_DIR', GLPI_VAR_DIR . '/_themes');
 EOF
 
 echo "==> 7. Setting Permissions..."
-chown root:root /var/www/html/glpi/ -R
-chown www-data:www-data /etc/glpi /var/lib/glpi /var/log/glpi -R
-chown www-data:www-data /var/www/html/glpi/marketplace -Rf
+chown -R root:root /var/www/html/glpi/
+chown -R www-data:www-data /etc/glpi /var/lib/glpi /var/log/glpi
+chown -R www-data:www-data /var/www/html/glpi/marketplace
 find /var/www/html/glpi/ -type f -exec chmod 0644 {} \;
 find /var/www/html/glpi/ -type d -exec chmod 0755 {} \;
 chmod -R 0755 /etc/glpi /var/lib/glpi /var/log/glpi
@@ -193,9 +196,9 @@ cat <<EOF > /etc/apache2/sites-available/glpi.conf
 </VirtualHost>
 EOF
 
-a2dissite 000-default.conf
-a2enmod rewrite
-a2ensite glpi.conf
+a2dissite 000-default.conf >/dev/null 2>&1
+a2enmod rewrite >/dev/null 2>&1
+a2ensite glpi.conf >/dev/null 2>&1
 
 PHP_INI="/etc/php/${PHP_VER}/apache2/php.ini"
 if [ -f "$PHP_INI" ]; then
@@ -212,8 +215,6 @@ systemctl restart apache2
 
 echo "=========================================================="
 echo "DONE! Access GLPI at: http://${DOMAIN_NAME}"
-echo "PHP Version Detected: ${PHP_VER}"
 echo "----------------------------------------------------------"
-echo "DB User: ${DB_USER} | DB Name: ${DB_NAME}"
-echo "Default GLPI User/Pass: glpi/glpi"
+echo "Database credentials set as requested during script run."
 echo "=========================================================="
