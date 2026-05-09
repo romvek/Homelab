@@ -1,5 +1,5 @@
 #!/bin/bash
-# GLPI Installation Script (Merged & Hardened Interactive Version)
+# GLPI Installation Script (Fixed Input Stalling)
 # Source: https://help.glpi-project.org/tutorials/procedures/install_glpi
 
 # Ensure the script is run as root
@@ -14,8 +14,6 @@ echo "          GLPI AUTOMATED INSTALLATION SCRIPT             "
 echo "=========================================================="
 
 echo "==> 1. UPDATING SYSTEM & INSTALLING PACKAGES"
-echo "This may take a few minutes..."
-# Use noninteractive frontend to prevent apt from breaking the terminal buffer
 export DEBIAN_FRONTEND=noninteractive
 apt update && apt upgrade -y
 apt install -y curl wget apache2 mariadb-server php libapache2-mod-php \
@@ -26,50 +24,43 @@ php-{apcu,cli,common,curl,gd,imap,ldap,mysql,xmlrpc,xml,mbstring,bcmath,intl,zip
 # ==========================================
 echo ""
 echo "==> 2. CONFIGURATION & DETECTION"
-echo "Note: You must provide input for each step to proceed."
 echo "----------------------------------------------------------"
-
-# FORCE INPUT TO READ FROM TERMINAL (Fixes the infinite loop/spamming error)
-exec 3<&0
-exec 0</dev/tty
 
 # --- TIMEZONE ---
 DETECTED_TZ=$(timedatectl | grep "Time zone" | awk '{print $3}')
-if [ -z "$DETECTED_TZ" ]; then
-    DETECTED_TZ="UTC"
-    echo "Warning: Could not detect system timezone. Falling back to UTC."
-fi
+DETECTED_TZ=${DETECTED_TZ:-UTC}
 
 while true; do
-    read -rp "Detected Timezone is [$DETECTED_TZ]. Accept? (y/n): " TZ_CONFIRM
+    # Direct reference to /dev/tty for every read to prevent stalling/loops
+    read -rp "Detected Timezone is [$DETECTED_TZ]. Accept? (y/n): " TZ_CONFIRM < /dev/tty
     if [[ $TZ_CONFIRM =~ ^[Yy]$ ]]; then
         TIMEZONE=$DETECTED_TZ
         break
     elif [[ $TZ_CONFIRM =~ ^[Nn]$ ]]; then
-        read -rp "Enter your specific Timezone (e.g., America/New_York): " TIMEZONE
+        read -rp "Enter your specific Timezone (e.g., America/New_York): " TIMEZONE < /dev/tty
         [ -n "$TIMEZONE" ] && break
     else
-        echo "Invalid input. Please enter 'y' to accept or 'n' to customize."
+        echo "Invalid input. Please enter 'y' or 'n'."
     fi
 done
 
 # --- DOMAIN ---
 while true; do
-    read -rp "Enter Domain/Hostname (Type 'localhost' for local setup): " DOMAIN_NAME
+    read -rp "Enter Domain/Hostname (or 'localhost'): " DOMAIN_NAME < /dev/tty
     [ -n "$DOMAIN_NAME" ] && break
-    echo "Domain name cannot be empty."
+    echo "Error: Domain name cannot be empty."
 done
 
 # --- DB USERNAME ---
 while true; do
-    read -rp "Enter Database Username [glpi]: " DB_USER
+    read -rp "Enter Database Username [glpi]: " DB_USER < /dev/tty
     DB_USER=${DB_USER:-glpi}
     [ -n "$DB_USER" ] && break
 done
 
 # --- DB NAME ---
 while true; do
-    read -rp "Enter Database Name [glpidb]: " DB_NAME
+    read -rp "Enter Database Name [glpidb]: " DB_NAME < /dev/tty
     DB_NAME=${DB_NAME:-glpidb}
     [ -n "$DB_NAME" ] && break
 done
@@ -77,23 +68,21 @@ done
 # --- DB PASSWORD ---
 while true; do
     echo "Setting password for DB user '$DB_USER'..."
-    read -s -rp "Enter Password: " DB_PASS
+    read -s -rp "Enter Password: " DB_PASS < /dev/tty
     echo ""
     if [ -z "$DB_PASS" ]; then
-        echo "Password cannot be empty!"
+        echo "Error: Password cannot be empty!"
         continue
     fi
-    read -s -rp "Confirm Password: " DB_PASS_CONFIRM
+    read -s -rp "Confirm Password: " DB_PASS_CONFIRM < /dev/tty
     echo ""
 
     if [ "$DB_PASS" != "$DB_PASS_CONFIRM" ]; then
-        echo "Passwords do not match! Please try again."
+        echo "Error: Passwords do not match!"
     elif [[ ${#DB_PASS} -lt 8 || ! "$DB_PASS" =~ [A-Za-z] || ! "$DB_PASS" =~ [0-9] ]]; then
         echo "Warning: Password is weak (needs 8+ chars, letters, and numbers)."
-        read -rp "Continue anyway? (y/n): " PASS_WEAK_CONFIRM
-        if [[ $PASS_WEAK_CONFIRM =~ ^[Yy]$ ]]; then
-            break
-        fi
+        read -rp "Continue anyway? (y/n): " PASS_WEAK_CONFIRM < /dev/tty
+        [[ $PASS_WEAK_CONFIRM =~ ^[Yy]$ ]] && break
     else
         break
     fi
@@ -101,27 +90,18 @@ done
 
 # --- FINAL CONFIRMATION ---
 echo ""
-echo "FINAL INSTALLATION SUMMARY:"
-echo "----------------------------------------------------------"
-echo "Timezone:   $TIMEZONE"
-echo "Domain:     $DOMAIN_NAME"
-echo "DB User:    $DB_USER"
-echo "DB Name:    $DB_NAME"
-echo "----------------------------------------------------------"
-read -rp "Apply settings and install GLPI now? (y/n): " FINAL_CONFIRM
+echo "SUMMARY:"
+echo "Timezone: $TIMEZONE | Domain: $DOMAIN_NAME | DB: $DB_NAME"
+read -rp "Proceed with installation? (y/n): " FINAL_CONFIRM < /dev/tty
 if [[ ! $FINAL_CONFIRM =~ ^[Yy]$ ]]; then
-    echo "Installation aborted by user."
     exit 1
 fi
-
-# Restore original stdin
-exec 0<&3
 
 # ==========================================
 # 3. EXECUTION STEPS
 # ==========================================
 
-echo "==> 3. Detecting PHP and GLPI Versions..."
+echo "==> 3. Detecting Versions..."
 PHP_VER=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
 GLPI_VERSION=$(curl -s https://api.github.com/repos/glpi-project/glpi/releases/latest | grep '"tag_name":' | head -n 1 | awk -F '"' '{print $4}')
 
@@ -133,13 +113,13 @@ mysql -uroot -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost
 mysql -uroot -e "GRANT SELECT ON \`mysql\`.\`time_zone_name\` TO '${DB_USER}'@'localhost';"
 mysql -uroot -e "FLUSH PRIVILEGES;"
 
-echo "==> 5. Downloading GLPI ${GLPI_VERSION}..."
+echo "==> 5. Downloading GLPI..."
 cd /var/www/html || exit
 wget -q https://github.com/glpi-project/glpi/releases/download/"${GLPI_VERSION}"/glpi-"${GLPI_VERSION}".tgz
 tar -xzf glpi-"${GLPI_VERSION}".tgz
 rm glpi-"${GLPI_VERSION}".tgz
 
-echo "==> 6. Setting up File Hierarchy (FHS)..."
+echo "==> 6. Setting up FHS..."
 cat <<EOF > /var/www/html/glpi/inc/downstream.php
 <?php
 define('GLPI_CONFIG_DIR', '/etc/glpi/');
@@ -175,12 +155,11 @@ EOF
 echo "==> 7. Setting Permissions..."
 chown -R root:root /var/www/html/glpi/
 chown -R www-data:www-data /etc/glpi /var/lib/glpi /var/log/glpi
-chown -R www-data:www-data /var/www/html/glpi/marketplace
 find /var/www/html/glpi/ -type f -exec chmod 0644 {} \;
 find /var/www/html/glpi/ -type d -exec chmod 0755 {} \;
 chmod -R 0755 /etc/glpi /var/lib/glpi /var/log/glpi
 
-echo "==> 8. Configuring Apache & PHP Tuning..."
+echo "==> 8. Tuning Apache & PHP..."
 cat <<EOF > /etc/apache2/sites-available/glpi.conf
 <VirtualHost *:80>
     ServerName ${DOMAIN_NAME}
@@ -202,19 +181,11 @@ a2ensite glpi.conf >/dev/null 2>&1
 
 PHP_INI="/etc/php/${PHP_VER}/apache2/php.ini"
 if [ -f "$PHP_INI" ]; then
-    sed -i "s/^\s*upload_max_filesize.*/upload_max_filesize = 20M/" "$PHP_INI"
-    sed -i "s/^\s*post_max_size.*/post_max_size = 20M/" "$PHP_INI"
-    sed -i "s/^\s*max_execution_time.*/max_execution_time = 60/" "$PHP_INI"
-    sed -i "s/^\s*max_input_vars.*/max_input_vars = 5000/" "$PHP_INI"
-    sed -i "s/^\s*memory_limit.*/memory_limit = 256M/" "$PHP_INI"
-    sed -i "s/^\s*session.cookie_httponly.*/session.cookie_httponly = On/" "$PHP_INI"
     sed -i "s|^\s*;\?date.timezone.*|date.timezone = ${TIMEZONE}|" "$PHP_INI"
+    sed -i "s/^\s*memory_limit.*/memory_limit = 256M/" "$PHP_INI"
 fi
 
 systemctl restart apache2
-
 echo "=========================================================="
-echo "DONE! Access GLPI at: http://${DOMAIN_NAME}"
-echo "----------------------------------------------------------"
-echo "Database credentials set as requested during script run."
+echo "DONE! URL: http://${DOMAIN_NAME}"
 echo "=========================================================="
