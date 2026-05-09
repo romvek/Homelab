@@ -1,5 +1,5 @@
 #!/bin/bash
-# GLPI Installation Script
+# GLPI Installation Script (Strict Input Validation)
 # Source: https://help.glpi-project.org/tutorials/procedures/install_glpi
 
 # Ensure the script is run as root
@@ -27,11 +27,9 @@ echo "==> 2. CONFIGURATION & DETECTION"
 echo "Note: You must provide input for each step to proceed."
 echo "----------------------------------------------------------"
 
+# --- TIMEZONE ---
 DETECTED_TZ=$(timedatectl | grep "Time zone" | awk '{print $3}')
-if [ -z "$DETECTED_TZ" ]; then
-    DETECTED_TZ="UTC"
-    echo "Warning: Could not detect system timezone. Falling back to UTC."
-fi
+DETECTED_TZ=${DETECTED_TZ:-UTC}
 while true; do
     read -p "Detected Timezone is [$DETECTED_TZ]. Accept? (y/n): " TZ_CONFIRM
     if [[ $TZ_CONFIRM =~ ^[Yy]$ ]]; then
@@ -40,32 +38,27 @@ while true; do
     elif [[ $TZ_CONFIRM =~ ^[Nn]$ ]]; then
         read -p "Enter your specific Timezone (e.g., America/New_York): " TIMEZONE
         [ ! -z "$TIMEZONE" ] && break
-        read -p "Enter your specific Timezone (e.g., America/New_York). See /usr/share/zoneinfo/ for valid options: " TIMEZONE
-    echo "Invalid input. Please enter 'y' to accept or 'n' to customize."
-done
-        read -p "Enter your specific Timezone (e.g., America/New_York): " TIMEZONE
-        [ ! -z "$TIMEZONE" ] && break
     fi
     echo "Invalid input. Please enter 'y' to accept or 'n' to customize."
 done
 
 # --- DOMAIN ---
 while true; do
-    read -p "Enter Domain/Hostname to be used in Apache configuration (Type 'localhost' for local setup): " DOMAIN_NAME
+    read -p "Enter Domain/Hostname (Type 'localhost' for local setup): " DOMAIN_NAME
     [ ! -z "$DOMAIN_NAME" ] && break
     echo "Domain name cannot be empty."
 done
 
 # --- DB USERNAME ---
 while true; do
-    read -p "Enter Database Username (e.g., glpi) [will be created if it does not exist]: " DB_USER
+    read -p "Enter Database Username (e.g., glpi): " DB_USER
     [ ! -z "$DB_USER" ] && break
     echo "Database username cannot be empty."
 done
 
 # --- DB NAME ---
 while true; do
-    read -p "Enter Database Name (e.g., glpidb) [will be created if it does not exist]: " DB_NAME
+    read -p "Enter Database Name (e.g., glpidb): " DB_NAME
     [ ! -z "$DB_NAME" ] && break
     echo "Database name cannot be empty."
 done
@@ -75,28 +68,16 @@ while true; do
     echo "Setting password for DB user '$DB_USER'..."
     read -s -p "Enter Password: " DB_PASS
     echo ""
-    if [ -z "$DB_PASS" ]; then
-        echo "Password cannot be empty!"
-        continue
-    fi
     read -s -p "Confirm Password: " DB_PASS_CONFIRM
     echo ""
-
-    # Password strength check: minimum 8 chars, at least one number and one letter
-    if [ "$DB_PASS" != "$DB_PASS_CONFIRM" ]; then
+    
+    if [ -z "$DB_PASS" ]; then
+        echo "Password cannot be empty!"
+    elif [ "$DB_PASS" != "$DB_PASS_CONFIRM" ]; then
         echo "Passwords do not match! Please try again."
-    elif [[ ${#DB_PASS} -lt 8 || ! "$DB_PASS" =~ [A-Za-z] || ! "$DB_PASS" =~ [0-9] ]]; then
-        echo "Warning: Password should be at least 8 characters and contain both letters and numbers."
-        read -p "Continue with this password? (y/n): " PASS_WEAK_CONFIRM
-        if [[ ! $PASS_WEAK_CONFIRM =~ ^[Yy]$ ]]; then
-            continue
-        else
-            break
-        fi
     else
         break
     fi
-done
 done
 
 # --- FINAL CONFIRMATION ---
