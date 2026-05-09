@@ -8,52 +8,76 @@ if [ "$EUID" -ne 0 ]; then
   exit
 fi
 
-# ==========================================
-# INTERACTIVE CONFIGURATION
-# ==========================================
-echo "--- GLPI Setup Configuration ---"
+clear
+echo "=========================================================="
+echo "          GLPI AUTOMATED INSTALLATION SCRIPT             "
+echo "=========================================================="
 
-# Prompt for Domain Name
-read -p "Enter your domain name [default: localhost]: " DOMAIN_INPUT
-DOMAIN_NAME=${DOMAIN_INPUT:-localhost}
-
-# Prompt for Database Password
-read -s -p "Enter password for GLPI database user: " DB_PASS
-echo "" # New line after hidden password input
-
-DB_NAME="glpi"
-DB_USER="glpi"
-
-# AUTO-DETECT TIMEZONE
-TIMEZONE=$(timedatectl | grep "Time zone" | awk '{print $3}')
-TIMEZONE=${TIMEZONE:-UTC}
-
-echo "------------------------------------------"
-echo "Setup Summary:"
-echo "Domain:   $DOMAIN_NAME"
-echo "Timezone: $TIMEZONE"
-echo "Database: $DB_NAME (User: $DB_USER)"
-echo "------------------------------------------"
-sleep 2
-
-# ==========================================
-# INSTALLATION STEPS
-# ==========================================
-
-echo "==> 1. Updating system and installing components..."
+echo "==> 1. UPDATING SYSTEM & INSTALLING PACKAGES"
+echo "This may take a few minutes..."
 apt update && apt upgrade -y
-apt install -y curl wget apache2 php php-{apcu,cli,common,curl,gd,imap,ldap,mysql,xmlrpc,xml,mbstring,bcmath,intl,zip,redis,bz2} libapache2-mod-php php-soap php-cas mariadb-server
+apt install -y curl wget apache2 mariadb-server php libapache2-mod-php \
+php-{apcu,cli,common,curl,gd,imap,ldap,mysql,xmlrpc,xml,mbstring,bcmath,intl,zip,redis,bz2,soap,cas}
 
-echo "==> 2. Detecting Environment..."
+# ==========================================
+# 2. INTERACTIVE CONFIGURATION & DETECTION
+# ==========================================
+echo ""
+echo "==> 2. CONFIGURATION & DETECTION"
+echo "Please confirm or customize the following settings:"
+echo "----------------------------------------------------------"
+
+# --- TIMEZONE ---
+DETECTED_TZ=$(timedatectl | grep "Time zone" | awk '{print $3}')
+DETECTED_TZ=${DETECTED_TZ:-UTC}
+read -p "Detected Timezone [$DETECTED_TZ]. Press Enter to accept or type custom: " USER_TZ
+TIMEZONE=${USER_TZ:-$DETECTED_TZ}
+
+# --- DOMAIN ---
+read -p "Enter Domain/Hostname [default: localhost]: " USER_DOMAIN
+DOMAIN_NAME=${USER_DOMAIN:-localhost}
+
+# --- DB USERNAME ---
+read -p "Enter Database Username [default: glpi]: " USER_DB_USER
+DB_USER=${USER_DB_USER:-glpi}
+
+# --- DB NAME ---
+read -p "Enter Database Name [default: glpi]: " USER_DB_NAME
+DB_NAME=${USER_DB_NAME:-glpi}
+
+# --- DB PASSWORD ---
+while true; do
+    read -s -p "Enter Password for Database User '$DB_USER': " DB_PASS
+    echo ""
+    read -s -p "Confirm Password: " DB_PASS_CONFIRM
+    echo ""
+    [ "$DB_PASS" == "$DB_PASS_CONFIRM" ] && [ ! -z "$DB_PASS" ] && break
+    echo "Passwords do not match or are empty. Please try again."
+done
+
+# --- FINAL CONFIRMATION ---
+echo ""
+echo "PROCEED WITH THESE SETTINGS?"
+echo "- Timezone: $TIMEZONE"
+echo "- Domain:   $DOMAIN_NAME"
+echo "- DB User:  $DB_USER"
+echo "- DB Name:  $DB_NAME"
+echo "----------------------------------------------------------"
+read -p "Continue? (y/n): " CONFIRM
+if [[ ! $CONFIRM =~ ^[Yy]$ ]]; then
+    echo "Installation cancelled."
+    exit 1
+fi
+
+# ==========================================
+# 3. EXECUTION STEPS
+# ==========================================
+
+echo "==> 3. Detecting PHP and GLPI Versions..."
 PHP_VER=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
 GLPI_VERSION=$(curl -s https://api.github.com/repos/glpi-project/glpi/releases/latest | grep '"tag_name":' | head -n 1 | awk -F '"' '{print $4}')
 
-if [ -z "$GLPI_VERSION" ]; then
-  echo "Error: Could not determine GLPI version."
-  exit 1
-fi
-
-echo "==> 3. Configuring MariaDB..."
+echo "==> 4. Configuring MariaDB..."
 mysql_tzinfo_to_sql /usr/share/zoneinfo | mysql mysql
 mysql -uroot -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME};"
 mysql -uroot -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';"
@@ -61,14 +85,13 @@ mysql -uroot -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost
 mysql -uroot -e "GRANT SELECT ON \`mysql\`.\`time_zone_name\` TO '${DB_USER}'@'localhost';"
 mysql -uroot -e "FLUSH PRIVILEGES;"
 
-echo "==> 4. Downloading GLPI ${GLPI_VERSION}..."
+echo "==> 5. Downloading GLPI ${GLPI_VERSION}..."
 cd /var/www/html
 wget https://github.com/glpi-project/glpi/releases/download/${GLPI_VERSION}/glpi-${GLPI_VERSION}.tgz
 tar -xvzf glpi-${GLPI_VERSION}.tgz
 rm glpi-${GLPI_VERSION}.tgz
 
-echo "==> 5. Structuring File Hierarchy (FHS)..."
-# Path hooks
+echo "==> 6. Setting up File Hierarchy (FHS)..."
 cat <<EOF > /var/www/html/glpi/inc/downstream.php
 <?php
 define('GLPI_CONFIG_DIR', '/etc/glpi/');
@@ -77,12 +100,10 @@ if (file_exists(GLPI_CONFIG_DIR . '/local_define.php')) {
 }
 EOF
 
-# Directories and migration
 mkdir -p /etc/glpi /var/lib/glpi /var/log/glpi
 [ -d /var/www/html/glpi/config ] && cp -r /var/www/html/glpi/config/* /etc/glpi/ && rm -rf /var/www/html/glpi/config
 [ -d /var/www/html/glpi/files ] && cp -r /var/www/html/glpi/files/* /var/lib/glpi/ && rm -rf /var/www/html/glpi/files
 
-# Local Definitions
 cat <<EOF > /etc/glpi/local_define.php
 <?php
 define('GLPI_VAR_DIR', '/var/lib/glpi');
@@ -103,23 +124,15 @@ define('GLPI_INVENTORY_DIR', GLPI_VAR_DIR . '/_inventories');
 define('GLPI_THEMES_DIR', GLPI_VAR_DIR . '/_themes');
 EOF
 
-echo "==> 6. Applying Security Permissions..."
+echo "==> 7. Setting Permissions..."
 chown root:root /var/www/html/glpi/ -R
-chown www-data:www-data /etc/glpi -R
-chown www-data:www-data /var/lib/glpi -R
-chown www-data:www-data /var/log/glpi -R
+chown www-data:www-data /etc/glpi /var/lib/glpi /var/log/glpi -R
 chown www-data:www-data /var/www/html/glpi/marketplace -Rf
-
 find /var/www/html/glpi/ -type f -exec chmod 0644 {} \;
 find /var/www/html/glpi/ -type d -exec chmod 0755 {} \;
-find /etc/glpi -type f -exec chmod 0644 {} \;
-find /etc/glpi -type d -exec chmod 0755 {} \;
-find /var/lib/glpi -type f -exec chmod 0644 {} \;
-find /var/lib/glpi -type d -exec chmod 0755 {} \;
-find /var/log/glpi -type f -exec chmod 0644 {} \;
-find /var/log/glpi -type d -exec chmod 0755 {} \;
+chmod -R 0755 /etc/glpi /var/lib/glpi /var/log/glpi
 
-echo "==> 7. Finalizing Web Server and PHP Tuning..."
+echo "==> 8. Configuring Apache & PHP Tuning..."
 cat <<EOF > /etc/apache2/sites-available/glpi.conf
 <VirtualHost *:80>
     ServerName ${DOMAIN_NAME}
@@ -153,12 +166,9 @@ fi
 systemctl restart apache2
 
 echo "=========================================================="
-echo "GLPI Installation Finished!"
-echo "Access: http://${DOMAIN_NAME}"
+echo "DONE! Access GLPI at: http://${DOMAIN_NAME}"
+echo "PHP Version Detected: ${PHP_VER}"
 echo "----------------------------------------------------------"
-echo "Use the following credentials in the web wizard:"
-echo "Database Host: localhost"
-echo "Database Name: ${DB_NAME}"
-echo "Database User: ${DB_USER}"
-echo "Database Password: (The one you just entered)"
+echo "DB User: ${DB_USER} | DB Name: ${DB_NAME}"
+echo "Default GLPI User/Pass: glpi/glpi"
 echo "=========================================================="
