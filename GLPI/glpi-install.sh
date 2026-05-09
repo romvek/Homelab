@@ -28,22 +28,22 @@ echo "Note: You must provide input for each step to proceed."
 echo "----------------------------------------------------------"
 
 # --- TIMEZONE ---
-DETECTED_TZ=$(timedatectl show --property=Timezone --value)
-DETECTED_TZ=${DETECTED_TZ:-UTC}
+DETECTED_TZ=$(cat /etc/timezone 2>/dev/null || echo "UTC")
 
 while true; do
-    echo "Detected Timezone: $DETECTED_TZ"
-    read -p "Use this timezone? (y/n): " TZ_CHOICE
+    echo -n "Detected Timezone: $DETECTED_TZ. Use this? (y/n): "
+    read TZ_CHOICE
     case "$TZ_CHOICE" in
         [Yy]* ) 
             TIMEZONE=$DETECTED_TZ
             break
             ;;
         [Nn]* ) 
-            read -p "Enter your specific Timezone (e.g., Europe/London): " TIMEZONE
+            echo -n "Enter custom Timezone (e.g., America/New_York): "
+            read TIMEZONE
             if [ ! -z "$TIMEZONE" ]; then break; fi
             ;;
-        * ) echo "Please answer 'y' or 'n'.";;
+        * ) echo "Invalid choice. Please enter 'y' or 'n'.";;
     esac
 done
 
