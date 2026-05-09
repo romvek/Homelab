@@ -28,25 +28,40 @@ echo "Note: You must provide input for each step to proceed."
 echo "----------------------------------------------------------"
 
 # --- TIMEZONE ---
-DETECTED_TZ=$(cat /etc/timezone 2>/dev/null || echo "UTC")
+echo "=== Auto Timezone Detection & Configuration ==="
 
-while true; do
-    read -rp "Detected Timezone: $DETECTED_TZ. Use this? (y/n): " TZ_CHOICE
-    case "$TZ_CHOICE" in
-        [Yy]* )
-            TIMEZONE="$DETECTED_TZ"
-            break
-            ;;
-        [Nn]* )
-            read -rp "Enter custom Timezone (e.g., America/New_York): " TIMEZONE
-            [[ -n "$TIMEZONE" ]] && break
-            echo "Timezone cannot be empty."
-            ;;
-        * )
-            echo "Invalid choice. Please enter y or n."
-            ;;
-    esac
-done
+# Detect timezone using systemd
+DETECTED_TZ=$(timedatectl show --property=Timezone --value 2>/dev/null)
+
+# Fallback if detection fails
+if [[ -z "$DETECTED_TZ" ]]; then
+    DETECTED_TZ="UTC"
+fi
+
+echo "Detected timezone: $DETECTED_TZ"
+
+# Ask user to confirm or override
+read -rp "Use this timezone? (y/n): " CHOICE
+
+case "$CHOICE" in
+    [Yy]* )
+        TIMEZONE="$DETECTED_TZ"
+        ;;
+    [Nn]* )
+        read -rp "Enter your timezone (e.g., America/Los_Angeles): " TIMEZONE
+        ;;
+    * )
+        echo "Invalid choice. Defaulting to detected timezone."
+        TIMEZONE="$DETECTED_TZ"
+        ;;
+esac
+
+echo "Setting timezone to: $TIMEZONE"
+
+# Apply timezone
+sudo timedatectl set-timezone "$TIMEZONE"
+
+echo "Timezone successfully set to: $(timedatectl show --property=Timezone --value)"
 
 # --- DOMAIN ---
 while true; do
