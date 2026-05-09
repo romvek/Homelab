@@ -28,18 +28,23 @@ echo "Note: You must provide input for each step to proceed."
 echo "----------------------------------------------------------"
 
 # --- TIMEZONE ---
-DETECTED_TZ=$(timedatectl | grep "Time zone" | awk '{print $3}')
+DETECTED_TZ=$(timedatectl show --property=Timezone --value)
 DETECTED_TZ=${DETECTED_TZ:-UTC}
+
 while true; do
-    read -p "Detected Timezone is [$DETECTED_TZ]. Accept? (y/n): " TZ_CONFIRM
-    if [[ $TZ_CONFIRM =~ ^[Yy]$ ]]; then
-        TIMEZONE=$DETECTED_TZ
-        break
-    elif [[ $TZ_CONFIRM =~ ^[Nn]$ ]]; then
-        read -p "Enter your specific Timezone (e.g., America/New_York): " TIMEZONE
-        [ ! -z "$TIMEZONE" ] && break
-    fi
-    echo "Invalid input. Please enter 'y' to accept or 'n' to customize."
+    echo "Detected Timezone: $DETECTED_TZ"
+    read -p "Use this timezone? (y/n): " TZ_CHOICE
+    case "$TZ_CHOICE" in
+        [Yy]* ) 
+            TIMEZONE=$DETECTED_TZ
+            break
+            ;;
+        [Nn]* ) 
+            read -p "Enter your specific Timezone (e.g., Europe/London): " TIMEZONE
+            if [ ! -z "$TIMEZONE" ]; then break; fi
+            ;;
+        * ) echo "Please answer 'y' or 'n'.";;
+    esac
 done
 
 # --- DOMAIN ---
