@@ -2,6 +2,21 @@
 # GLPI Installation Script (Strict Input Validation)
 # Source: https://help.glpi-project.org/tutorials/procedures/install_glpi
 
+header_info() {
+  clear
+  cat <<"EOF"
+   _____ _      _____ _____   _____           _        _ _    _____           _       _   
+  / ____| |    |  __ \_   _| |_   _|         | |      | | |  / ____|         (_)     | |  
+ | |  __| |    | |__) || |     | |  _ __  ___| |_ __ _| | | | (___   ___ _ __ _ _ __ | |_ 
+ | | |_ | |    |  ___/ | |     | | | '_ \/ __| __/ _` | | |  \___ \ / __| '__| | '_ \| __|
+ | |__| | |____| |    _| |_   _| |_| | | \__ \ || (_| | | |  ____) | (__| |  | | |_) | |_ 
+  \_____|______|_|   |_____| |_____|_| |_|___/\__\__,_|_|_| |_____/ \___|_|  |_| .__/ \__|
+                                                                               | |        
+                                                                               |_|        
+
+EOF
+}
+
 # Ensure the script is run as root
 if [ "$EUID" -ne 0 ]; then
   echo "Please run as root (or using sudo)"
