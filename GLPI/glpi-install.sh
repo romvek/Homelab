@@ -31,55 +31,56 @@ echo "----------------------------------------------------------"
 DETECTED_TZ=$(cat /etc/timezone 2>/dev/null || echo "UTC")
 
 while true; do
-    echo -n "Detected Timezone: $DETECTED_TZ. Use this? (y/n): "
-    read TZ_CHOICE
+    read -rp "Detected Timezone: $DETECTED_TZ. Use this? (y/n): " TZ_CHOICE
     case "$TZ_CHOICE" in
-        [Yy]* ) 
-            TIMEZONE=$DETECTED_TZ
+        [Yy]* )
+            TIMEZONE="$DETECTED_TZ"
             break
             ;;
-        [Nn]* ) 
-            echo -n "Enter custom Timezone (e.g., America/New_York): "
-            read TIMEZONE
-            if [ ! -z "$TIMEZONE" ]; then break; fi
+        [Nn]* )
+            read -rp "Enter custom Timezone (e.g., America/New_York): " TIMEZONE
+            [[ -n "$TIMEZONE" ]] && break
+            echo "Timezone cannot be empty."
             ;;
-        * ) echo "Invalid choice. Please enter 'y' or 'n'.";;
+        * )
+            echo "Invalid choice. Please enter y or n."
+            ;;
     esac
 done
 
 # --- DOMAIN ---
 while true; do
-    read -p "Enter Domain/Hostname (Type 'localhost' for local setup): " DOMAIN_NAME
-    [ ! -z "$DOMAIN_NAME" ] && break
-    echo "Domain name cannot be empty."
+    read -rp "Enter Domain/Hostname [localhost]: " DOMAIN_NAME
+    DOMAIN_NAME="${DOMAIN_NAME:-localhost}"
+    [[ -n "$DOMAIN_NAME" ]] && break
 done
 
 # --- DB USERNAME ---
 while true; do
-    read -p "Enter Database Username (e.g., glpi): " DB_USER
-    [ ! -z "$DB_USER" ] && break
-    echo "Database username cannot be empty."
+    read -rp "Enter Database Username [glpi]: " DB_USER
+    DB_USER="${DB_USER:-glpi}"
+    [[ -n "$DB_USER" ]] && break
 done
 
 # --- DB NAME ---
 while true; do
-    read -p "Enter Database Name (e.g., glpidb): " DB_NAME
-    [ ! -z "$DB_NAME" ] && break
-    echo "Database name cannot be empty."
+    read -rp "Enter Database Name [glpi]: " DB_NAME
+    DB_NAME="${DB_NAME:-glpi}"
+    [[ -n "$DB_NAME" ]] && break
 done
 
 # --- DB PASSWORD ---
 while true; do
     echo "Setting password for DB user '$DB_USER'..."
-    read -s -p "Enter Password: " DB_PASS
+    read -rsp "Enter Password: " DB_PASS
     echo ""
-    read -s -p "Confirm Password: " DB_PASS_CONFIRM
+    read -rsp "Confirm Password: " DB_PASS_CONFIRM
     echo ""
-    
-    if [ -z "$DB_PASS" ]; then
-        echo "Password cannot be empty!"
-    elif [ "$DB_PASS" != "$DB_PASS_CONFIRM" ]; then
-        echo "Passwords do not match! Please try again."
+
+    if [[ -z "$DB_PASS" ]]; then
+        echo "Error: Password cannot be empty."
+    elif [[ "$DB_PASS" != "$DB_PASS_CONFIRM" ]]; then
+        echo "Error: Passwords do not match."
     else
         break
     fi
