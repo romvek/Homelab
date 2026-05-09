@@ -1,21 +1,7 @@
 #!/bin/bash
-# GLPI Installation Script (Strict Input Validation)
+# GLPI Installation Script 
 # Source: https://help.glpi-project.org/tutorials/procedures/install_glpi
-
-header_info() {
-  clear
-  cat <<"EOF"
-   _____ _      _____ _____   _____           _        _ _    _____           _       _   
-  / ____| |    |  __ \_   _| |_   _|         | |      | | |  / ____|         (_)     | |  
- | |  __| |    | |__) || |     | |  _ __  ___| |_ __ _| | | | (___   ___ _ __ _ _ __ | |_ 
- | | |_ | |    |  ___/ | |     | | | '_ \/ __| __/ _` | | |  \___ \ / __| '__| | '_ \| __|
- | |__| | |____| |    _| |_   _| |_| | | \__ \ || (_| | | |  ____) | (__| |  | | |_) | |_ 
-  \_____|______|_|   |_____| |_____|_| |_|___/\__\__,_|_|_| |_____/ \___|_|  |_| .__/ \__|
-                                                                               | |        
-                                                                               |_|        
-
-EOF
-}
+# Requires: Ubuntu Server 22.04 LTS
 
 # Ensure the script is run as root
 if [ "$EUID" -ne 0 ]; then
@@ -23,116 +9,40 @@ if [ "$EUID" -ne 0 ]; then
   exit
 fi
 
-clear
-echo "=========================================================="
-echo "          GLPI AUTOMATED INSTALLATION SCRIPT             "
-echo "=========================================================="
+# ==========================================
+# CONFIGURATION VARIABLES
+# Change these values to match your desired setup
+# ==========================================
+DB_NAME="glpi"
+DB_USER="glpi"
+DB_PASS="yourstrongpassword"
+GLPI_VERSION="11.0.7"
+DOMAIN_NAME="localhost"
+TIMEZONE="America/Los_Angeles"
+PHP_VERSION="8.4"
+# ==========================================
 
-echo "==> 1. UPDATING SYSTEM & INSTALLING PACKAGES"
-echo "This phase ensures all dependencies are present before configuration."
+echo "==> 1. Updating system and installing components..."
 apt update && apt upgrade -y
-apt install -y curl wget apache2 mariadb-server php libapache2-mod-php \
-php-{apcu,cli,common,curl,gd,imap,ldap,mysql,xmlrpc,xml,mbstring,bcmath,intl,zip,redis,bz2,soap,cas}
+apt install -y apache2 php php-{apcu,cli,common,curl,gd,imap,ldap,mysql,xmlrpc,xml,mbstring,bcmath,intl,zip,redis,bz2} libapache2-mod-php php-soap php-cas mariadb-server
 
-# ==========================================
-# 2. INTERACTIVE CONFIGURATION
-# ==========================================
-echo ""
-echo "==> 2. CONFIGURATION & DETECTION"
-echo "Note: You must provide input for each step to proceed."
-echo "----------------------------------------------------------"
-
-# --- TIMEZONE ---
-DETECTED_TZ=$(timedatectl | grep "Time zone" | awk '{print $3}')
-DETECTED_TZ=${DETECTED_TZ:-UTC}
-while true; do
-    read -p "Detected Timezone is [$DETECTED_TZ]. Accept? (y/n): " TZ_CONFIRM
-    if [[ $TZ_CONFIRM =~ ^[Yy]$ ]]; then
-        TIMEZONE=$DETECTED_TZ
-        break
-    elif [[ $TZ_CONFIRM =~ ^[Nn]$ ]]; then
-        read -p "Enter your specific Timezone (e.g., America/New_York): " TIMEZONE
-        [ ! -z "$TIMEZONE" ] && break
-    fi
-    echo "Invalid input. Please enter 'y' to accept or 'n' to customize."
-done
-
-# --- DOMAIN ---
-while true; do
-    read -p "Enter Domain/Hostname (Type 'localhost' for local setup): " DOMAIN_NAME
-    [ ! -z "$DOMAIN_NAME" ] && break
-    echo "Domain name cannot be empty."
-done
-
-# --- DB USERNAME ---
-while true; do
-    read -p "Enter Database Username (e.g., glpi): " DB_USER
-    [ ! -z "$DB_USER" ] && break
-    echo "Database username cannot be empty."
-done
-
-# --- DB NAME ---
-while true; do
-    read -p "Enter Database Name (e.g., glpidb): " DB_NAME
-    [ ! -z "$DB_NAME" ] && break
-    echo "Database name cannot be empty."
-done
-
-# --- DB PASSWORD ---
-while true; do
-    echo "Setting password for DB user '$DB_USER'..."
-    read -s -p "Enter Password: " DB_PASS
-    echo ""
-    read -s -p "Confirm Password: " DB_PASS_CONFIRM
-    echo ""
-    
-    if [ -z "$DB_PASS" ]; then
-        echo "Password cannot be empty!"
-    elif [ "$DB_PASS" != "$DB_PASS_CONFIRM" ]; then
-        echo "Passwords do not match! Please try again."
-    else
-        break
-    fi
-done
-
-# --- FINAL CONFIRMATION ---
-echo ""
-echo "FINAL INSTALLATION SUMMARY:"
-echo "----------------------------------------------------------"
-echo "Timezone:   $TIMEZONE"
-echo "Domain:     $DOMAIN_NAME"
-echo "DB User:    $DB_USER"
-echo "DB Name:    $DB_NAME"
-echo "----------------------------------------------------------"
-read -p "Apply settings and install GLPI now? (y/n): " FINAL_CONFIRM
-if [[ ! $FINAL_CONFIRM =~ ^[Yy]$ ]]; then
-    echo "Installation aborted by user."
-    exit 1
-fi
-
-# ==========================================
-# 3. EXECUTION STEPS
-# ==========================================
-
-echo "==> 3. Identifying Latest Versions..."
-PHP_VER=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
-GLPI_VERSION=$(curl -s https://api.github.com/repos/glpi-project/glpi/releases/latest | grep '"tag_name":' | head -n 1 | awk -F '"' '{print $4}')
-
-echo "==> 4. Initializing MariaDB..."
+echo "==> 2. Configuring the Database..."
+# Load timezone data into MariaDB
 mysql_tzinfo_to_sql /usr/share/zoneinfo | mysql mysql
-mysql -uroot -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME};"
-mysql -uroot -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';"
+
+# Create GLPI database and user
+mysql -uroot -e "CREATE DATABASE ${DB_NAME};"
+mysql -uroot -e "CREATE USER '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';"
 mysql -uroot -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost';"
 mysql -uroot -e "GRANT SELECT ON \`mysql\`.\`time_zone_name\` TO '${DB_USER}'@'localhost';"
 mysql -uroot -e "FLUSH PRIVILEGES;"
 
-echo "==> 5. Downloading and Unpacking GLPI ${GLPI_VERSION}..."
+echo "==> 3. Preparing files and installing GLPI..."
 cd /var/www/html
 wget https://github.com/glpi-project/glpi/releases/download/${GLPI_VERSION}/glpi-${GLPI_VERSION}.tgz
 tar -xvzf glpi-${GLPI_VERSION}.tgz
-rm glpi-${GLPI_VERSION}.tgz
 
-echo "==> 6. Applying FHS Directory Structure..."
+# Instruct GLPI application where the configuration directory is stored
 cat <<EOF > /var/www/html/glpi/inc/downstream.php
 <?php
 define('GLPI_CONFIG_DIR', '/etc/glpi/');
@@ -141,14 +51,15 @@ if (file_exists(GLPI_CONFIG_DIR . '/local_define.php')) {
 }
 EOF
 
-mkdir -p /etc/glpi /var/lib/glpi /var/log/glpi
-[ -d /var/www/html/glpi/config ] && cp -r /var/www/html/glpi/config/* /etc/glpi/ && rm -rf /var/www/html/glpi/config
-[ -d /var/www/html/glpi/files ] && cp -r /var/www/html/glpi/files/* /var/lib/glpi/ && rm -rf /var/www/html/glpi/files
+# Move directories to comply with File Hierarchy Standard
+mv /var/www/html/glpi/config /etc/glpi
+mv /var/www/html/glpi/files /var/lib/glpi
+mv /var/lib/glpi/_log /var/log/glpi
 
+# Instruct GLPI where the other directories are stored
 cat <<EOF > /etc/glpi/local_define.php
 <?php
 define('GLPI_VAR_DIR', '/var/lib/glpi');
-define('GLPI_LOG_DIR', '/var/log/glpi');
 define('GLPI_DOC_DIR', GLPI_VAR_DIR);
 define('GLPI_CACHE_DIR', GLPI_VAR_DIR . '/_cache');
 define('GLPI_CRON_DIR', GLPI_VAR_DIR . '/_cron');
@@ -163,53 +74,67 @@ define('GLPI_TMP_DIR', GLPI_VAR_DIR . '/_tmp');
 define('GLPI_UPLOAD_DIR', GLPI_VAR_DIR . '/_uploads');
 define('GLPI_INVENTORY_DIR', GLPI_VAR_DIR . '/_inventories');
 define('GLPI_THEMES_DIR', GLPI_VAR_DIR . '/_themes');
+define('GLPI_LOG_DIR', '/var/log/glpi');
 EOF
 
-echo "==> 7. Configuring Permissions..."
+echo "==> 4. Setting correct folder and file permissions..."
 chown root:root /var/www/html/glpi/ -R
-chown www-data:www-data /etc/glpi /var/lib/glpi /var/log/glpi -R
+chown www-data:www-data /etc/glpi -R
+chown www-data:www-data /var/lib/glpi -R
+chown www-data:www-data /var/log/glpi -R
 chown www-data:www-data /var/www/html/glpi/marketplace -Rf
+
 find /var/www/html/glpi/ -type f -exec chmod 0644 {} \;
 find /var/www/html/glpi/ -type d -exec chmod 0755 {} \;
-chmod -R 0755 /etc/glpi /var/lib/glpi /var/log/glpi
+find /etc/glpi -type f -exec chmod 0644 {} \;
+find /etc/glpi -type d -exec chmod 0755 {} \;
+find /var/lib/glpi -type f -exec chmod 0644 {} \;
+find /var/lib/glpi -type d -exec chmod 0755 {} \;
+find /var/log/glpi -type f -exec chmod 0644 {} \;
+find /var/log/glpi -type d -exec chmod 0755 {} \;
 
-echo "==> 8. Finalizing Web Server & PHP ${PHP_VER}..."
+echo "==> 5. Configuring Web Server (Apache) & PHP..."
+# Create Apache VirtualHost file
 cat <<EOF > /etc/apache2/sites-available/glpi.conf
+# Start of the VirtualHost configuration for port 80
 <VirtualHost *:80>
     ServerName ${DOMAIN_NAME}
     DocumentRoot /var/www/html/glpi/public
+
     <Directory /var/www/html/glpi/public>
         Require all granted
         RewriteEngine On
+        # Ensure authorization headers are passed to PHP
         RewriteCond %{HTTP:Authorization} ^(.+)$
         RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+        # Redirect all requests to GLPI router, unless the file exists
         RewriteCond %{REQUEST_FILENAME} !-f
         RewriteRule ^(.*)$ index.php [QSA,L]
     </Directory>
 </VirtualHost>
 EOF
 
+# Apply Apache settings
 a2dissite 000-default.conf
 a2enmod rewrite
 a2ensite glpi.conf
 
-PHP_INI="/etc/php/${PHP_VER}/apache2/php.ini"
-if [ -f "$PHP_INI" ]; then
-    sed -i "s/^\s*upload_max_filesize.*/upload_max_filesize = 20M/" $PHP_INI
-    sed -i "s/^\s*post_max_size.*/post_max_size = 20M/" $PHP_INI
-    sed -i "s/^\s*max_execution_time.*/max_execution_time = 60/" $PHP_INI
-    sed -i "s/^\s*max_input_vars.*/max_input_vars = 5000/" $PHP_INI
-    sed -i "s/^\s*memory_limit.*/memory_limit = 256M/" $PHP_INI
-    sed -i "s/^\s*session.cookie_httponly.*/session.cookie_httponly = On/" $PHP_INI
-    sed -i "s|^\s*;\?date.timezone.*|date.timezone = ${TIMEZONE}|" $PHP_INI
-fi
+# Modify php.ini parameters based on documentation recommendations
+PHP_INI="/etc/php/${PHP_VERSION}/apache2/php.ini"
+sed -i "s/^\s*upload_max_filesize.*/upload_max_filesize = 20M/" $PHP_INI
+sed -i "s/^\s*post_max_size.*/post_max_size = 20M/" $PHP_INI
+sed -i "s/^\s*max_execution_time.*/max_execution_time = 60/" $PHP_INI
+sed -i "s/^\s*max_input_vars.*/max_input_vars = 5000/" $PHP_INI
+sed -i "s/^\s*memory_limit.*/memory_limit = 256M/" $PHP_INI
+sed -i "s/^\s*session.cookie_httponly.*/session.cookie_httponly = On/" $PHP_INI
+# Replace commented or pre-existing timezone entry
+sed -i "s|^\s*;\?date.timezone.*|date.timezone = ${TIMEZONE}|" $PHP_INI
 
+# Restart Apache
 systemctl restart apache2
 
 echo "=========================================================="
-echo "GLPI INSTALLATION COMPLETE!"
-echo "URL: http://${DOMAIN_NAME}"
-echo "----------------------------------------------------------"
-echo "Configuration complete. Please finish the setup in your browser."
-echo "Database credentials set as requested during script run."
+echo "GLPI Script Setup Complete!"
+echo "It is highly recommended that you run 'mysql_secure_installation' manually to secure MariaDB."
+echo "Once done, open your browser and navigate to http://${DOMAIN_NAME} to begin the web installation."
 echo "=========================================================="
