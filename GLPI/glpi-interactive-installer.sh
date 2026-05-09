@@ -1,5 +1,5 @@
 #!/bin/bash
-# GLPI Installation Script (Fixed Terminal Stalling)
+# GLPI Installation Script (Fixed Execution Flow)
 # Source: https://help.glpi-project.org/tutorials/procedures/install_glpi
 
 # Ensure the script is run as root
@@ -26,21 +26,18 @@ echo ""
 echo "==> 2. CONFIGURATION & DETECTION"
 echo "----------------------------------------------------------"
 
-# Open file descriptor 3 for the actual terminal (keyboard)
-exec 3< /dev/tty
-
 # --- TIMEZONE ---
 DETECTED_TZ=$(cat /etc/timezone 2>/dev/null || echo "UTC")
 
 while true; do
     echo -n "Detected Timezone is [$DETECTED_TZ]. Accept? (y/n): "
-    read -u 3 TZ_CONFIRM
+    read -r TZ_CONFIRM < /dev/tty
     if [[ $TZ_CONFIRM =~ ^[Yy]$ ]]; then
         TIMEZONE=$DETECTED_TZ
         break
     elif [[ $TZ_CONFIRM =~ ^[Nn]$ ]]; then
-        echo -n "Enter your specific Timezone (e.g., America/New_York): "
-        read -u 3 TIMEZONE
+        echo -n "Enter custom Timezone (e.g., America/New_York): "
+        read -r TIMEZONE < /dev/tty
         [ -n "$TIMEZONE" ] && break
     else
         echo "Invalid input. Please enter 'y' or 'n'."
@@ -49,16 +46,16 @@ done
 
 # --- DOMAIN ---
 while true; do
-    echo -n "Enter Domain/Hostname (or 'localhost'): "
-    read -u 3 DOMAIN_NAME
+    echo -n "Enter Domain/Hostname [localhost]: "
+    read -r DOMAIN_NAME < /dev/tty
+    DOMAIN_NAME=${DOMAIN_NAME:-localhost}
     [ -n "$DOMAIN_NAME" ] && break
-    echo "Error: Domain name cannot be empty."
 done
 
 # --- DB USERNAME ---
 while true; do
     echo -n "Enter Database Username [glpi]: "
-    read -u 3 DB_USER
+    read -r DB_USER < /dev/tty
     DB_USER=${DB_USER:-glpi}
     [ -n "$DB_USER" ] && break
 done
@@ -66,7 +63,7 @@ done
 # --- DB NAME ---
 while true; do
     echo -n "Enter Database Name [glpidb]: "
-    read -u 3 DB_NAME
+    read -r DB_NAME < /dev/tty
     DB_NAME=${DB_NAME:-glpidb}
     [ -n "$DB_NAME" ] && break
 done
@@ -75,10 +72,10 @@ done
 while true; do
     echo "Setting password for DB user '$DB_USER'..."
     echo -n "Enter Password: "
-    read -u 3 -s DB_PASS
+    read -rs DB_PASS < /dev/tty
     echo ""
     echo -n "Confirm Password: "
-    read -u 3 -s DB_PASS_CONFIRM
+    read -rs DB_PASS_CONFIRM < /dev/tty
     echo ""
 
     if [ -z "$DB_PASS" ]; then
@@ -88,27 +85,27 @@ while true; do
     elif [[ ${#DB_PASS} -lt 8 || ! "$DB_PASS" =~ [A-Za-z] || ! "$DB_PASS" =~ [0-9] ]]; then
         echo "Warning: Password is weak (needs 8+ chars, letters, and numbers)."
         echo -n "Continue anyway? (y/n): "
-        read -u 3 PASS_WEAK_CONFIRM
+        read -r PASS_WEAK_CONFIRM < /dev/tty
         [[ $PASS_WEAK_CONFIRM =~ ^[Yy]$ ]] && break
     else
         break
     fi
 done
 
-# Close file descriptor 3
-exec 3<&-
-
 # --- FINAL CONFIRMATION ---
 echo ""
 echo "SUMMARY:"
 echo "Timezone: $TIMEZONE | Domain: $DOMAIN_NAME | DB: $DB_NAME"
-read -p "Proceed with installation? (y/n): " FINAL_CONFIRM
+echo "----------------------------------------------------------"
+echo -n "Proceed with installation? (y/n): "
+read -r FINAL_CONFIRM < /dev/tty
 if [[ ! $FINAL_CONFIRM =~ ^[Yy]$ ]]; then
+    echo "Installation cancelled."
     exit 1
 fi
 
 # ==========================================
-# 3. EXECUTION STEPS
+# 3. EXECUTION STEPS (Automated)
 # ==========================================
 
 echo "==> 3. Identifying Latest GLPI Version..."
