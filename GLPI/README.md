@@ -5,3 +5,5 @@ Run the command in your in your Container/VM
 
 # Still to come
 Working on making the script interactive
+<img width="680" height="240" alt="image" src="https://github.com/user-attachments/assets/9d042e40-eb41-4d6a-a15c-ad3cca049828" />
+`wget -qO- https://raw.githubusercontent.com/romvek/Homelab/refs/heads/main/GLPI/glpi-interactive-installer.sh | bash`
