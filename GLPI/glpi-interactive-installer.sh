@@ -45,11 +45,21 @@ while true; do
 done
 
 # --- DOMAIN ---
+DEFAULT_DOMAIN="localhost"
 while true; do
-    echo -n "Enter Domain/Hostname [localhost]: "
-    read -r DOMAIN_NAME < /dev/tty
-    DOMAIN_NAME=${DOMAIN_NAME:-localhost}
-    [ -n "$DOMAIN_NAME" ] && break
+    echo -n "Default Domain/Hostname is [$DEFAULT_DOMAIN]. Accept? (y/n): "
+    read -r DOM_CONFIRM < /dev/tty
+    if [[ $DOM_CONFIRM =~ ^[Yy]$ ]]; then
+        DOMAIN_NAME=$DEFAULT_DOMAIN
+        break
+    elif [[ $DOM_CONFIRM =~ ^[Nn]$ ]]; then
+        echo -n "Enter custom Domain/Hostname: "
+        read -r DOMAIN_NAME < /dev/tty
+        [ -n "$DOMAIN_NAME" ] && break
+        echo "Error: Domain name cannot be empty."
+    else
+        echo "Invalid input. Please enter 'y' to accept or 'n' to customize."
+    fi
 done
 
 # --- DB USERNAME ---
