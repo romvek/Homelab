@@ -1,5 +1,5 @@
 #!/bin/bash
-# GLPI Installation Script (Fixed Execution Flow)
+# GLPI Installation Script (Advanced Timezone Detection & Fixed Flow)
 # Source: https://help.glpi-project.org/tutorials/procedures/install_glpi
 
 # Ensure the script is run as root
@@ -26,23 +26,43 @@ echo ""
 echo "==> 2. CONFIGURATION & DETECTION"
 echo "----------------------------------------------------------"
 
-# --- TIMEZONE ---
-DETECTED_TZ=$(timedatectl | grep "Time zone" | awk '{print $3}')
+# --- TIMEZONE AUTO-DETECTION & VALIDATION ---
+echo "=== Auto‑Detecting Timezone ==="
 
-while true; do
-    echo -n "Detected Timezone is [$DETECTED_TZ]. Accept? (y/n): "
-    read -r TZ_CONFIRM < /dev/tty
-    if [[ $TZ_CONFIRM =~ ^[Yy]$ ]]; then
-        TIMEZONE=$DETECTED_TZ
-        break
-    elif [[ $TZ_CONFIRM =~ ^[Nn]$ ]]; then
-        echo -n "Enter custom Timezone (e.g., America/New_York): "
-        read -r TIMEZONE < /dev/tty
-        [ -n "$TIMEZONE" ] && break
-    else
-        echo "Invalid input. Please enter 'y' or 'n'."
-    fi
-done
+# 1. Try web detection
+TIMEZONE=$(curl -s https://ipapi.co/timezone)
+
+# 2. Fallback to system detection
+if [[ -z "$TIMEZONE" ]]; then
+    echo "Web detection failed. Trying system detection..."
+    TIMEZONE=$(timedatectl show --property=Timezone --value 2>/dev/null)
+fi
+
+# 3. Final fallback: manual input
+if [[ -z "$TIMEZONE" ]]; then
+    echo "Could not auto‑detect timezone."
+    while true; do
+        read -rp "Enter your timezone manually (e.g., America/Los_Angeles): " TIMEZONE < /dev/tty
+        [[ -n "$TIMEZONE" ] ] && break
+        echo "Timezone cannot be empty."
+    done
+fi
+
+# 4. Validate timezone exists on system
+if [[ ! -f "/usr/share/zoneinfo/$TIMEZONE" ]]; then
+    echo "The timezone '$TIMEZONE' is not valid on this system."
+    while true; do
+        read -rp "Enter a valid timezone (e.g., Europe/London): " TIMEZONE < /dev/tty
+        [[ -f "/usr/share/zoneinfo/$TIMEZONE" ]] && break
+        echo "Invalid timezone. Please check /usr/share/zoneinfo/"
+    done
+fi
+
+# 5. Apply timezone
+echo "Setting system timezone to: $TIMEZONE"
+timedatectl set-timezone "$TIMEZONE"
+echo "Timezone successfully set to: $TIMEZONE"
+echo "----------------------------------------------------------"
 
 # --- DOMAIN ---
 while true; do
