@@ -27,78 +27,76 @@ echo "==> 2. CONFIGURATION & DETECTION"
 echo "Note: You must provide input for each step to proceed."
 echo "----------------------------------------------------------"
 
-# --- TIMEZONE ---
-echo "=== Auto Timezone Detection & Configuration ==="
-
-# Detect timezone using systemd
-DETECTED_TZ=$(timedatectl show --property=Timezone --value 2>/dev/null)
-
-# Fallback if detection fails
-if [[ -z "$DETECTED_TZ" ]]; then
+DETECTED_TZ=$(timedatectl | grep "Time zone" | awk '{print $3}')
+if [ -z "$DETECTED_TZ" ]; then
     DETECTED_TZ="UTC"
+    echo "Warning: Could not detect system timezone. Falling back to UTC."
 fi
-
-echo "Detected timezone: $DETECTED_TZ"
-
-# Ask user to confirm or override
-read -rp "Use this timezone? (y/n): " CHOICE
-
-case "$CHOICE" in
-    [Yy]* )
-        TIMEZONE="$DETECTED_TZ"
-        ;;
-    [Nn]* )
-        read -rp "Enter your timezone (e.g., America/Los_Angeles): " TIMEZONE
-        ;;
-    * )
-        echo "Invalid choice. Defaulting to detected timezone."
-        TIMEZONE="$DETECTED_TZ"
-        ;;
-esac
-
-echo "Setting timezone to: $TIMEZONE"
-
-# Apply timezone
-sudo timedatectl set-timezone "$TIMEZONE"
-
-echo "Timezone successfully set to: $(timedatectl show --property=Timezone --value)"
+while true; do
+    read -p "Detected Timezone is [$DETECTED_TZ]. Accept? (y/n): " TZ_CONFIRM
+    if [[ $TZ_CONFIRM =~ ^[Yy]$ ]]; then
+        TIMEZONE=$DETECTED_TZ
+        break
+    elif [[ $TZ_CONFIRM =~ ^[Nn]$ ]]; then
+        read -p "Enter your specific Timezone (e.g., America/New_York): " TIMEZONE
+        [ ! -z "$TIMEZONE" ] && break
+        read -p "Enter your specific Timezone (e.g., America/New_York). See /usr/share/zoneinfo/ for valid options: " TIMEZONE
+    echo "Invalid input. Please enter 'y' to accept or 'n' to customize."
+done
+        read -p "Enter your specific Timezone (e.g., America/New_York): " TIMEZONE
+        [ ! -z "$TIMEZONE" ] && break
+    fi
+    echo "Invalid input. Please enter 'y' to accept or 'n' to customize."
+done
 
 # --- DOMAIN ---
 while true; do
-    read -rp "Enter Domain/Hostname [localhost]: " DOMAIN_NAME
-    DOMAIN_NAME="${DOMAIN_NAME:-localhost}"
-    [[ -n "$DOMAIN_NAME" ]] && break
+    read -p "Enter Domain/Hostname to be used in Apache configuration (Type 'localhost' for local setup): " DOMAIN_NAME
+    [ ! -z "$DOMAIN_NAME" ] && break
+    echo "Domain name cannot be empty."
 done
 
 # --- DB USERNAME ---
 while true; do
-    read -rp "Enter Database Username [glpi]: " DB_USER
-    DB_USER="${DB_USER:-glpi}"
-    [[ -n "$DB_USER" ]] && break
+    read -p "Enter Database Username (e.g., glpi) [will be created if it does not exist]: " DB_USER
+    [ ! -z "$DB_USER" ] && break
+    echo "Database username cannot be empty."
 done
 
 # --- DB NAME ---
 while true; do
-    read -rp "Enter Database Name [glpi]: " DB_NAME
-    DB_NAME="${DB_NAME:-glpi}"
-    [[ -n "$DB_NAME" ]] && break
+    read -p "Enter Database Name (e.g., glpidb) [will be created if it does not exist]: " DB_NAME
+    [ ! -z "$DB_NAME" ] && break
+    echo "Database name cannot be empty."
 done
 
 # --- DB PASSWORD ---
 while true; do
     echo "Setting password for DB user '$DB_USER'..."
-    read -rsp "Enter Password: " DB_PASS
+    read -s -p "Enter Password: " DB_PASS
     echo ""
-    read -rsp "Confirm Password: " DB_PASS_CONFIRM
+    if [ -z "$DB_PASS" ]; then
+        echo "Password cannot be empty!"
+        continue
+    fi
+    read -s -p "Confirm Password: " DB_PASS_CONFIRM
     echo ""
 
-    if [[ -z "$DB_PASS" ]]; then
-        echo "Error: Password cannot be empty."
-    elif [[ "$DB_PASS" != "$DB_PASS_CONFIRM" ]]; then
-        echo "Error: Passwords do not match."
+    # Password strength check: minimum 8 chars, at least one number and one letter
+    if [ "$DB_PASS" != "$DB_PASS_CONFIRM" ]; then
+        echo "Passwords do not match! Please try again."
+    elif [[ ${#DB_PASS} -lt 8 || ! "$DB_PASS" =~ [A-Za-z] || ! "$DB_PASS" =~ [0-9] ]]; then
+        echo "Warning: Password should be at least 8 characters and contain both letters and numbers."
+        read -p "Continue with this password? (y/n): " PASS_WEAK_CONFIRM
+        if [[ ! $PASS_WEAK_CONFIRM =~ ^[Yy]$ ]]; then
+            continue
+        else
+            break
+        fi
     else
         break
     fi
+done
 done
 
 # --- FINAL CONFIRMATION ---
