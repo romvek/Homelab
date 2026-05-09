@@ -27,7 +27,7 @@ echo "==> 2. CONFIGURATION & DETECTION"
 echo "----------------------------------------------------------"
 
 # --- TIMEZONE ---
-DETECTED_TZ=$(cat /etc/timezone 2>/dev/null || echo "UTC")
+DETECTED_TZ=$(timedatectl | grep "Time zone" | awk '{print $3}')
 
 while true; do
     echo -n "Detected Timezone is [$DETECTED_TZ]. Accept? (y/n): "
@@ -136,8 +136,9 @@ if (file_exists(GLPI_CONFIG_DIR . '/local_define.php')) {
 EOF
 
 mkdir -p /etc/glpi /var/lib/glpi /var/log/glpi
-[ -d /var/www/html/glpi/config ] && cp -r /var/www/html/glpi/config/* /etc/glpi/ && rm -rf /var/www/html/glpi/config
-[ -d /var/www/html/glpi/files ] && cp -r /var/www/html/glpi/files/* /var/lib/glpi/ && rm -rf /var/www/html/glpi/files
+[ -d /var/www/html/glpi/config ] && cp -r /var/www/html/glpi/config/ /etc/glpi/ && rm -rf /var/www/html/glpi/config
+[ -d /var/www/html/glpi/files ] && cp -r /var/www/html/glpi/files/ /var/lib/glpi/ && rm -rf /var/www/html/glpi/files
+[ -d /var/lib/glpi/_log ] && cp -r /var/lib/glpi/_log /var/log/glpi/ && rm -rf /var/lib/glpi/_log
 
 cat <<EOF > /etc/glpi/local_define.php
 <?php
@@ -160,11 +161,19 @@ define('GLPI_THEMES_DIR', GLPI_VAR_DIR . '/_themes');
 EOF
 
 echo "==> 7. Setting Security Permissions..."
-chown -R root:root /var/www/html/glpi/
-chown -R www-data:www-data /etc/glpi /var/lib/glpi /var/log/glpi
+chown root:root /var/www/html/glpi/ -R
+chown www-data:www-data /etc/glpi -R
+chown www-data:www-data /var/lib/glpi -R
+chown www-data:www-data /var/log/glpi -R
+chown www-data:www-data /var/www/html/glpi/marketplace -Rf
 find /var/www/html/glpi/ -type f -exec chmod 0644 {} \;
 find /var/www/html/glpi/ -type d -exec chmod 0755 {} \;
-chmod -R 0755 /etc/glpi /var/lib/glpi /var/log/glpi
+find /etc/glpi -type f -exec chmod 0644 {} \;
+find /etc/glpi -type d -exec chmod 0755 {} \;
+find /var/lib/glpi -type f -exec chmod 0644 {} \;
+find /var/lib/glpi -type d -exec chmod 0755 {} \;
+find /var/log/glpi -type f -exec chmod 0644 {} \;
+find /var/log/glpi -type d -exec chmod 0755 {} \;
 
 echo "==> 8. Configuring Apache & PHP..."
 cat <<EOF > /etc/apache2/sites-available/glpi.conf
@@ -188,9 +197,13 @@ a2ensite glpi.conf >/dev/null 2>&1
 
 PHP_INI="/etc/php/${PHP_VER}/apache2/php.ini"
 if [ -f "$PHP_INI" ]; then
-    sed -i "s|^\s*;\?date.timezone.*|date.timezone = ${TIMEZONE}|" "$PHP_INI"
-    sed -i "s/^\s*memory_limit.*/memory_limit = 256M/" "$PHP_INI"
+    sed -i "s/^\s*upload_max_filesize.*/upload_max_filesize = 20M/" "$PHP_INI"
+    sed -i "s/^\s*post_max_size.*/post_max_size = 20M/" "$PHP_INI"
+    sed -i "s/^\s*max_execution_time.*/max_execution_time = 60/" "$PHP_INI"
     sed -i "s/^\s*max_input_vars.*/max_input_vars = 5000/" "$PHP_INI"
+    sed -i "s/^\s*memory_limit.*/memory_limit = 256M/" "$PHP_INI"
+    sed -i "s/^\s*session.cookie_httponly.*/session.cookie_httponly = On/" "$PHP_INI"
+    sed -i "s|^\s*;\?date.timezone.*|date.timezone = ${TIMEZONE}|" "$PHP_INI"
 fi
 
 systemctl restart apache2
