@@ -40,7 +40,7 @@ cd /tmp
 
 # Clean API routing stream without local file write side-effects
 NODE_VERSION_URL=$(curl -s https://api.github.com/repos/prometheus/node_exporter/releases/latest \
-  | grep "browser_download_url.*linux-amd64.tar.gz"" \
+  | grep "browser_download_url.*linux-amd64.tar.gz" \
   | cut -d '"' -f 4)
 
 wget -qO node_exporter.tar.gz "$NODE_VERSION_URL"
