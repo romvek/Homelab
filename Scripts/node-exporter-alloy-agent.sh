@@ -93,7 +93,7 @@ log "Installing Grafana Alloy daemon tracking package..."
 apt-get update -qq
 apt-get install -y alloy
 
-log "Elevating Alloy system access to security logs via 'adm' membership..."
+log "Elevating Alloy system access to security logs via adm membership..."
 usermod -aG adm alloy
 
 log "Writing unified River pipeline configuration layer..."
