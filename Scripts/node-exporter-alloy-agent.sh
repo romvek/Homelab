@@ -123,7 +123,7 @@ loki.source.file "log_scrape" {
 // Ingestion endpoint target mapping
 loki.write "loki_service" {
   endpoint {
-    url = sys.env("LOKI_URL")
+    url = "http://loki.romvek.internal:3100/loki/api/v1/push"
   }
 }
 EOF
