@@ -44,7 +44,7 @@ curl -s https://api.github.com/repos/prometheus/node_exporter/releases/latest \
   | tr -d \" \
   | wget -qi -
 
-tar -xvf node_exporter-*-linux-amd64.tar.gz
+tar -xvf node_exporter*linux-amd64.tar.gz
 
 # Move the node_exporter binary to standard location
 sudo mv node_exporter*linux-amd64/node_exporter /usr/local/bin/
