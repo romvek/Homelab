@@ -44,11 +44,11 @@ curl -s https://api.github.com/repos/prometheus/node_exporter/releases/latest \
   | tr -d \" \
   | wget -qi -
 
-tar -xvf node_exporter*linux-amd64.tar.gz
+tar -xvf node_exporter*
 
 # Move the node_exporter binary to standard location
-sudo mv node_exporter*linux-amd64/node_exporter /usr/local/bin/
-rm -rf /tmp/node_exporter*
+mv node_exporter*linux-amd64/node_exporter /usr/local/bin/
+rm -rf node_exporter*
 
 # Setup unprivileged system user if missing
 if ! id -u node_exporter &>/dev/null; then
