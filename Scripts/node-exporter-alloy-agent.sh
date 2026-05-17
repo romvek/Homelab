@@ -45,8 +45,8 @@ NODE_VERSION_URL=$(curl -s https://api.github.com/repos/prometheus/node_exporter
 
 wget -qO node_exporter.tar.gz "$NODE_VERSION_URL"
 tar -xf node_exporter.tar.gz
-mv node_exporter.*linux-amd64/node_exporter /usr/local/bin/
-rm -rf node_exporter*
+mv /tmp/node_exporter.*linux-amd64/node_exporter /usr/local/bin/
+rm -rf /tmp/node_exporter*
 
 # Setup unprivileged system user if missing
 if ! id -u node_exporter &>/dev/null; then
