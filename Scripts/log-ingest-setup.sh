@@ -9,7 +9,7 @@
 # Move to tempory directory
 cd /tmp
 
-curl -LO https:/api.github.com/repos/prometheus/node_exporter/releases/latest \
+curl -s https://api.github.com/repos/prometheus/node_exporter/releases/latest \
   | grep "browser_download_url.*linux-amd64.tar.gz" \
   | cut -d : -f 2,3 \
   | tr -d \" \
@@ -62,7 +62,7 @@ sudo systemctl status node_exporter
 # 1 Download and Extract Promtail
 cd /tmp
 
-curl -LO https:/api.github.com/repos/grafana/loki/releases/latest \
+curl -s https://api.github.com/repos/grafana/loki/releases/latest \
   | grep "browser_download_url.*linux-amd64.tar.gz" \
   | cut -d : -f 2,3 \
   | tr -d \" \
@@ -71,7 +71,7 @@ curl -LO https:/api.github.com/repos/grafana/loki/releases/latest \
 tar -xvf loki-*-linux-amd64.tar.gz
 
 sudo mv promtail-*-linux-amd64/promtail /usr/local/bin/promtail
-sudo chomd +x /usr/local/bin/promtail
+sudo chmod +x /usr/local/bin/promtail
 
 # 2. Create configuration
 sudo tee /etc/promtail-config.yaml > /dev/null <<EOF
