@@ -110,7 +110,7 @@ local.file_match "system_logs" {
   path_targets = [
     { "__address__" = "localhost", "__path__" = "/var/log/syslog", "job" = "syslog", "instance" = constants.hostname },
     { "__address__" = "localhost", "__path__" = "/var/log/auth.log", "job" = "auth", "instance" = constants.hostname },
-    { "__address__" = "localhost", "__path__" = "/var/log/**/*.log", "job" = "varlogs", "instance" = constants.hostname }
+    { "__address__" = "localhost", "__path__" = "/var/log/**/*.log", "job" = "varlogs", "instance" = constants.hostname },
   ]
 }
 
@@ -123,7 +123,7 @@ loki.source.file "log_scrape" {
 // Ingestion endpoint target mapping
 loki.write "loki_service" {
   endpoint {
-    url = "${LOKI_URL}"
+    url = sys.env("LOKI_URL")
   }
 }
 EOF
