@@ -38,14 +38,16 @@ done
 log "Initializing Standalone Node Exporter Setup..."
 cd /tmp
 
-# Clean API routing stream without local file write side-effects
-NODE_VERSION_URL=$(curl -s https://api.github.com/repos/prometheus/node_exporter/releases/latest \
+curl -s https://api.github.com/repos/prometheus/node_exporter/releases/latest \
   | grep "browser_download_url.*linux-amd64.tar.gz" \
-  | cut -d '"' -f 4)
+  | cut -d : -f 2,3 \
+  | tr -d \" \
+  | wget -qi -
 
-wget -qO node_exporter.tar.gz "$NODE_VERSION_URL"
-tar -xf node_exporter.tar.gz
-mv /tmp/node_exporter.*linux-amd64/node_exporter /usr/local/bin/
+tar -xvf node_exporter-*-linux-amd64.tar.gz
+
+# Move the node_exporter binary to standard location
+sudo mv node_exporter*linux-amd64/node_exporter /usr/local/bin/
 rm -rf /tmp/node_exporter*
 
 # Setup unprivileged system user if missing
